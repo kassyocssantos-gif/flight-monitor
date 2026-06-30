@@ -59,19 +59,21 @@ def cheapest_for_route(origin, destination, start, end, cabin):
     return best
 
 
-def send_telegram(text):
-    tok = os.environ.get("TELEGRAM_BOT_TOKEN")
-    chat = os.environ.get("TELEGRAM_CHAT_ID")
-    if not tok or not chat:
+def send_whatsapp(text):
+    """Envia via CallMeBot (HTTP, sem navegador) — roda no GitHub Actions.
+    Setup unico: mandar 'I allow callmebot to send me messages' p/ +34 644 84 71 89
+    no WhatsApp; o bot responde com a apikey. Sem WHATSAPP_PHONE+CALLMEBOT_APIKEY,
+    so nao envia (igual ao comportamento antigo sem credenciais)."""
+    phone = os.environ.get("WHATSAPP_PHONE")        # formato internacional, ex 5547988178754
+    apikey = os.environ.get("CALLMEBOT_APIKEY")
+    if not phone or not apikey:
         return False
     import urllib.request
     import urllib.parse
-    data = urllib.parse.urlencode({
-        "chat_id": chat, "text": text,
-        "parse_mode": "Markdown", "disable_web_page_preview": "true"}).encode()
-    url = f"https://api.telegram.org/bot{tok}/sendMessage"
+    qs = urllib.parse.urlencode({"phone": phone, "text": text, "apikey": apikey})
+    url = f"https://api.callmebot.com/whatsapp.php?{qs}"
     try:
-        with urllib.request.urlopen(urllib.request.Request(url, data=data), timeout=20):
+        with urllib.request.urlopen(url, timeout=30):
             return True
     except Exception:
         return False
@@ -128,8 +130,8 @@ def main():
     print("\n".join(report))
 
     if alerts:
-        ok = send_telegram("*Alerta de passagens*\n\n" + "\n".join(alerts))
-        print(f"\n{len(alerts)} alerta(s). Telegram: {'enviado' if ok else 'nao configurado'}.")
+        ok = send_whatsapp("*Alerta de passagens*\n\n" + "\n".join(alerts))
+        print(f"\n{len(alerts)} alerta(s). WhatsApp: {'enviado' if ok else 'nao configurado'}.")
     else:
         print("\nSem alertas nesta rodada.")
 

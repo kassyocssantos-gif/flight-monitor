@@ -19,8 +19,8 @@ quando uma rota bate um novo mínimo ou o preço-alvo. Já vem com suas rotas ca
 pip install -r requirements.txt
 python monitor.py
 ```
-Gera `latest_report.md`, `history.csv` e `state.json`, e manda alerta no Telegram
-(se as variáveis estiverem setadas).
+Gera `latest_report.md`, `history.csv` e `state.json`, e manda alerta no WhatsApp
+(se `WHATSAPP_PHONE` e `CALLMEBOT_APIKEY` estiverem setados).
 
 ### Rodar automático no GitHub Actions (recomendado)
 1. Suba o repo:
@@ -30,9 +30,10 @@ Gera `latest_report.md`, `history.csv` e `state.json`, e manda alerta no Telegra
    git remote add origin git@github.com:kassyocssantos-gif/flight-monitor.git
    git push -u origin main
    ```
-2. (Opcional) Telegram em **Settings → Secrets and variables → Actions**:
-   `TELEGRAM_BOT_TOKEN` e `TELEGRAM_CHAT_ID` (bot via @BotFather; chat_id via
-   `https://api.telegram.org/bot<TOKEN>/getUpdates`).
+2. (Opcional) WhatsApp via **CallMeBot** em **Settings → Secrets and variables → Actions**:
+   `WHATSAPP_PHONE` (formato internacional, ex `5547988178754`) e `CALLMEBOT_APIKEY`.
+   Setup único da apikey: no WhatsApp, mande `I allow callmebot to send me messages`
+   para **+34 644 84 71 89**; o bot responde com a sua apikey.
 3. Pronto. O workflow roda todo dia às **06:00 (Brasília)**. Pra testar agora:
    **Actions → flight-monitor → Run workflow**. O histórico é commitado de volta no repo.
 
