@@ -1,0 +1,2 @@
+# Motor milhas (local, via CDP no Chrome real). NAO usado pelo Actions.
+playwright>=1.40
