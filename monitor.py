@@ -91,36 +91,47 @@ def main():
     cabin = cfg.get("cabin", "ECONOMY")
     fx = cfg.get("usd_to_brl")  # opcional: mostra preco aproximado em BRL
 
+    import concurrent.futures as cf
+    target_default = cfg.get("target_usd")
+    pax = cfg.get("pax", 1)
+
     report = [f"# flight-monitor — {now}",
-              f"_Janela {start} a {end} · ida · {cabin} · fonte Google Flights (fli)_", ""]
+              f"_Janela {start} a {end} · ida · {cabin} · {pax} pax · fonte Google Flights (fli)_", ""]
     history_rows, alerts = [], []
 
-    for route in cfg["routes"]:
+    # busca todas as rotas em paralelo (sao muitas) e ordena pelo preco
+    def work(route):
+        return route, cheapest_for_route(route["origin"], route["destination"], start, end, cabin)
+    with cf.ThreadPoolExecutor(max_workers=6) as ex:
+        results = list(ex.map(work, cfg["routes"]))
+    results.sort(key=lambda rb: rb[1]["price"] if rb[1] else 9e9)
+
+    for route, best in results:
         o, d = route["origin"], route["destination"]
-        target = route.get("target_usd")
+        target = route.get("target_usd", target_default)
         key = f"{o}-{d}"
-        best = cheapest_for_route(o, d, start, end, cabin)
         if not best:
             report.append(f"- **{key}**: sem resultado.")
             continue
 
         usd = best["price"]
-        brl = f" (~R$ {usd * fx:.0f})" if fx else ""
+        tot = usd * pax
+        money = f" → R$ {usd * fx:.0f}/pax · R$ {tot * fx:.0f}/{pax}px" if fx else ""
         prev = state.get(key, {}).get("min_usd")
         is_low = prev is None or usd < prev
-        hit = target is not None and usd <= target
-        tag = (" 🟢 novo minimo" if is_low else "") + (" 🎯 meta" if hit else "")
+        on_target = target is None or usd <= target
+        tag = (" 🟢 novo min" if is_low else "") + (" 🎯 ALVO" if on_target else "")
 
-        report.append(
-            f"- **{key}**: US$ {usd:.0f}{brl} em {best['date']}"
-            f"{(' | min anterior US$ ' + format(prev, '.0f')) if prev else ''}{tag}")
+        report.append(f"- **{key}**: US$ {usd:.0f}{money} em {best['date']}"
+                      f"{(' | min ant US$ ' + format(prev, '.0f')) if prev else ''}{tag}")
         history_rows.append([now, o, d, best["date"], f"{usd:.0f}", "USD"])
 
-        # alerta SO em novo minimo (preco melhorou) — evita spam diario do mesmo
-        # preco; a meta 🎯 entra como tag informativa, nao como gatilho proprio.
+        # alerta = novo minimo DENTRO do alvo (sem ruido de minimos acima do alvo)
         if is_low:
-            alerts.append(f"✈️ *{key}* US$ {usd:.0f}{brl} em {best['date']}{tag}")
             state[key] = {"min_usd": usd, "date": best["date"], "seen_at": now}
+            if on_target:
+                alerts.append(f"✈️ *{key}* R$ {tot * fx:.0f} ({pax}px) · "
+                              f"US$ {usd:.0f}/pax em {best['date']} 🎯")
 
     # grava historico
     new_file = not os.path.exists(HISTORY_PATH)
