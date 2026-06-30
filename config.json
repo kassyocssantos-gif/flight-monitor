@@ -1,0 +1,16 @@
+{
+  "date_start": "2026-07-15",
+  "date_end": "2026-08-05",
+  "cabin": "ECONOMY",
+  "usd_to_brl": 5.5,
+  "routes": [
+    { "origin": "BSB", "destination": "JFK", "target_usd": 290 },
+    { "origin": "BSB", "destination": "MIA", "target_usd": 350 },
+    { "origin": "BSB", "destination": "MCO", "target_usd": 450 },
+    { "origin": "BSB", "destination": "FLL", "target_usd": 390 },
+    { "origin": "FLN", "destination": "JFK", "target_usd": 380 },
+    { "origin": "CWB", "destination": "MIA", "target_usd": 320 },
+    { "origin": "NVT", "destination": "MIA", "target_usd": 380 },
+    { "origin": "VCP", "destination": "MIA", "target_usd": 350 }
+  ]
+}
