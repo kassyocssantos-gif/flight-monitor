@@ -18,15 +18,20 @@ jobs:
           python-version: "3.12"
       - name: Instalar dependencias
         run: pip install -r requirements.txt
-      - name: Rodar monitor (dinheiro via fli)
+      - name: Rodar monitor internacional (BR->EUA)
         env:
           WHATSAPP_PHONE: ${{ secrets.WHATSAPP_PHONE }}
           CALLMEBOT_APIKEY: ${{ secrets.CALLMEBOT_APIKEY }}
         run: python monitor.py
+      - name: Rodar monitor domestico (Sul->SP)
+        env:
+          WHATSAPP_PHONE: ${{ secrets.WHATSAPP_PHONE }}
+          CALLMEBOT_APIKEY: ${{ secrets.CALLMEBOT_APIKEY }}
+        run: python monitor.py config_domestico.json
       - name: Salvar historico
         run: |
           git config user.name "flight-monitor-bot"
           git config user.email "bot@users.noreply.github.com"
-          git add history.csv state.json latest_report.md
+          git add history.csv state.json latest_report.md history_domestico.csv state_domestico.json latest_report_domestico.md
           git commit -m "precos $(date -u +%F)" || echo "sem mudancas"
           git push || echo "push ignorado"

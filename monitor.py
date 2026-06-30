@@ -9,16 +9,21 @@ Depende so do pacote `flights` (CLI `fli`). Roda perfeito no GitHub Actions.
 """
 
 import os
+import sys
 import csv
 import json
 import subprocess
 import datetime as dt
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-CONFIG_PATH = os.path.join(ROOT, "config.json")
-HISTORY_PATH = os.path.join(ROOT, "history.csv")
-STATE_PATH = os.path.join(ROOT, "state.json")
-REPORT_PATH = os.path.join(ROOT, "latest_report.md")
+# Multi-config: `python monitor.py [config.json]`. Cada config tem seu proprio
+# state/history/report (sufixo derivado do nome: config_domestico -> *_domestico).
+CONFIG_PATH = os.path.join(ROOT, sys.argv[1] if len(sys.argv) > 1 else "config.json")
+_stem = os.path.splitext(os.path.basename(CONFIG_PATH))[0]
+_suf = "" if _stem == "config" else "_" + _stem.replace("config_", "").replace("config", "")
+HISTORY_PATH = os.path.join(ROOT, f"history{_suf}.csv")
+STATE_PATH = os.path.join(ROOT, f"state{_suf}.json")
+REPORT_PATH = os.path.join(ROOT, f"latest_report{_suf}.md")
 
 
 def load_json(path, default):
@@ -147,7 +152,8 @@ def main():
     print("\n".join(report))
 
     if alerts:
-        ok = send_whatsapp("*Alerta de passagens*\n\n" + "\n".join(alerts))
+        titulo = cfg.get("nome", "passagens")
+        ok = send_whatsapp(f"*Alerta {titulo}*\n\n" + "\n".join(alerts))
         print(f"\n{len(alerts)} alerta(s). WhatsApp: {'enviado' if ok else 'nao configurado'}.")
     else:
         print("\nSem alertas nesta rodada.")

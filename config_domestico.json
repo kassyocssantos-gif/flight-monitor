@@ -1,0 +1,17 @@
+{
+  "nome": "doméstico Sul→SP",
+  "date_start": "2026-06-30",
+  "date_end": "2026-08-05",
+  "cabin": "ECONOMY",
+  "usd_to_brl": 5.5,
+  "pax": 2,
+  "target_usd": 55,
+  "routes": [
+    { "origin": "NVT", "destination": "GRU" },
+    { "origin": "NVT", "destination": "CGH" },
+    { "origin": "NVT", "destination": "VCP" },
+    { "origin": "CWB", "destination": "GRU" },
+    { "origin": "CWB", "destination": "CGH" },
+    { "origin": "CWB", "destination": "VCP" }
+  ]
+}
