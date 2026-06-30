@@ -116,7 +116,9 @@ def main():
             f"{(' | min anterior US$ ' + format(prev, '.0f')) if prev else ''}{tag}")
         history_rows.append([now, o, d, best["date"], f"{usd:.0f}", "USD"])
 
-        if is_low or hit:
+        # alerta SO em novo minimo (preco melhorou) — evita spam diario do mesmo
+        # preco; a meta 🎯 entra como tag informativa, nao como gatilho proprio.
+        if is_low:
             alerts.append(f"✈️ *{key}* US$ {usd:.0f}{brl} em {best['date']}{tag}")
             state[key] = {"min_usd": usd, "date": best["date"], "seen_at": now}
 
