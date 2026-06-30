@@ -40,13 +40,17 @@ def cheapest_for_route(origin, destination, start, end, cabin):
     try:
         out = subprocess.run(cmd, capture_output=True, text=True, timeout=240)
     except subprocess.TimeoutExpired:
+        print(f"  [diag {origin}-{destination}] timeout", flush=True)
         return None
     raw = out.stdout.strip()
     if not raw or "{" not in raw:
+        diag = (out.stderr or out.stdout or "").strip().replace("\n", " ")[:300]
+        print(f"  [diag {origin}-{destination}] rc={out.returncode} sem JSON: {diag}", flush=True)
         return None
     try:
         data = json.loads(raw[raw.index("{"):raw.rindex("}") + 1])
     except (ValueError, json.JSONDecodeError):
+        print(f"  [diag {origin}-{destination}] JSON invalido: {raw[:200]}", flush=True)
         return None
     best = None
     for d in data.get("dates", []):
