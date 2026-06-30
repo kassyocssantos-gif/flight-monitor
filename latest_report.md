@@ -1,4 +1,4 @@
-# flight-monitor — 2026-06-30 11:41 UTC
+# flight-monitor — 2026-06-30 11:54 UTC
 _Janela 2026-07-15 a 2026-08-05 · ida · ECONOMY · fonte Google Flights (fli)_
 
 - **BSB-JFK**: US$ 281 (~R$ 1546) em 2026-07-16 | min anterior US$ 281 🎯 meta
