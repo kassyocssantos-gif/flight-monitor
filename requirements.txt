@@ -1,1 +1,2 @@
 flights>=0.9.0
+click>=8.1
