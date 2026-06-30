@@ -4,7 +4,7 @@
   "cabin": "ECONOMY",
   "usd_to_brl": 5.5,
   "pax": 2,
-  "target_usd": 281,
+  "target_usd": 309,
   "routes": [
     { "origin": "GRU", "destination": "MIA" },
     { "origin": "GRU", "destination": "MCO" },
