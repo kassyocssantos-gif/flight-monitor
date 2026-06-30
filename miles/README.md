@@ -1,46 +1,62 @@
-# Motor Milhas (Smiles) — local, via Chrome real
+# Motor Milhas (Smiles) — local, via API real na sessão
 
-Diferente do motor-dinheiro (que usa a `fli` e roda na nuvem/Actions), milhas **não
-dá pra rodar no GitHub Actions**. Investigação confirmou o porquê:
+Diferente do motor-dinheiro (`fli`, roda na nuvem/Actions), milhas exige a **sessão
+logada do Smiles** (Akamai Bot Manager bloqueia chamada externa). Roda local, no
+Chrome real do Kassyo.
 
-- **Akamai Bot Manager** (sensor data, `_abck`/`bm_sz`) + site é **SPA React**.
-- Headless + IP de datacenter do Actions = **bloqueado**.
-- Preço/disponibilidade em milhas vem de **API XHR** (`/v1/search`), não do HTML.
+## O que foi descoberto (2026-06-30, validado)
+Investigando o **tripmilhas.com** (curadoria de promoções, site Wix) achei o
+deep-link correto do Smiles e, com ele, a **API real de disponibilidade em milhas**:
 
-## Como funciona (a saída certa)
-O scraper conecta no **seu Chrome real** via **CDP** — assim herda a sessão logada,
-os cookies Akamai válidos e o IP residencial — e **intercepta a resposta da API**
-`/v1/search` em vez de raspar o DOM (frágil). A `x-api-key` e os cookies vão no
-request automaticamente; **nada hardcoded**.
+```
+GET https://api-air-flightsearch-blue.smiles.com.br/v1/airlines/search
+    ?cabin=ECONOMIC&originAirportCode=BSB&destinationAirportCode=JFK
+    &departureDate=2026-07-15&memberNumber=<seu>&adults=1&children=0&infants=0
+    &forceCongener=false
+```
 
-## Pré-requisitos (seus — uma vez)
-1. **Chrome com debug ligado:**
-   ```bash
-   /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
-   ```
-   (ou ative em `chrome://inspect`). Confirme: `curl localhost:9222/json/version`.
-2. **Logado no Smiles** nesse Chrome (só você tem a credencial).
+- `departureDate` = `YYYY-MM-DD`. `memberNumber` opcional (com ele vem o preço **Clube**).
+- Resposta: `requestedFlightSegmentList[].flightList[].fareList[]` →
+  `{miles, baseMiles, g3.costTax (taxa R$), money, type (SMILES|SMILES_CLUB), legListCost}`.
+- **Só passa de DENTRO da sessão logada** (cookies Akamai `_abck`/`bm_sz` + login) —
+  por isso o fetch roda no Chrome real (`credentials:include`), não via curl externo.
 
-## Rodar
+**Validado BSB→JFK 15/07:** 263.500 milhas + R$ 311,73 (Clube) ≈ **R$ 5.000** vs
+**R$ 1.546 em dinheiro** (US$ 281). Pra essa rota, dinheiro ganha de longe.
+
+## Por que não roda no GitHub Actions
+Headless + IP de datacenter = Akamai bloqueia. Precisa de Chrome real logado +
+IP residencial. É o custo de furar o Akamai.
+
+## Execução (a decidir)
+O `smiles_scraper.py` conecta no Chrome via **CDP** (`connect_over_cdp`) e roda o
+fetch da API de dentro da aba logada. Requer Chrome com debug:
+
+```bash
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
+```
+
+E estar logado no Smiles. No setup atual o Chrome do Kassyo não expõe porta TCP
+(flowa-control conecta por canal próprio), então as opções são:
+
+- **Sob demanda** (mais simples): peça "checa milhas das minhas rotas" — rodo a
+  captura na hora via flowa-control e comparo com o motor-dinheiro.
+- **Standalone agendado**: subir o Chrome com `--remote-debugging-port=9222` e
+  agendar `smiles_scraper.py` no launchd.
+- **Tripmilhas como fonte de promoções**: raspar a lista de oportunidades do
+  tripmilhas (Wix, sem Akamai, roda até na nuvem) — pega o que ELES curam, não
+  suas rotas sob demanda.
+
+## Rodar (modo standalone)
 ```bash
 pip install -r miles/requirements.txt
 python -m playwright install chromium
-python miles/smiles_scraper.py
+SMILES_MEMBER=<seu_numero> python miles/smiles_scraper.py
 ```
-Gera `miles/miles_results.json` com o mais barato em milhas por rota.
-
-## Status: aguardando 1ª validação
-O fluxo (CDP + captura da API) está pronto. Falta **uma rodada com sua sessão
-logada** pra confirmar o formato real da resposta: o scraper salva a 1ª resposta
-crua em `_raw_sample` dentro do JSON; com ela ajusto `extract_offers()` aos nomes
-de campo reais (miles, taxas, data). Só depois disso agendamos (launchd) — não
-agendo o que ainda não validei rodando.
+Gera `miles/miles_results.json` (mais barato em milhas por rota).
 
 ## Verdades importantes
-- **Frágil por natureza:** quando o Smiles muda a API, o parser pode precisar de ajuste.
-- **ToS:** raspar pode violar os Termos do Smiles. Use por sua conta, baixa frequência.
-- **Depende da máquina ligada** + Chrome aberto/logado (é o custo de furar o Akamai).
-
-## Milhas vs dinheiro
-Compare `milhas × custo_do_milheiro + taxas` com o preço em dinheiro do monitor.
-Piso de referência: **US$ 281 (BSB→NY) ≈ R$ 1.560**.
+- **ToS:** consultar a API/raspar pode violar os Termos do Smiles. Baixa frequência.
+- **Depende da máquina ligada + Chrome logado.**
+- **Milhas vs dinheiro:** compare `milhas × custo_do_milheiro + taxas` com o preço
+  em R$ do motor-dinheiro. Piso: US$ 281 (BSB→NY) ≈ R$ 1.560.

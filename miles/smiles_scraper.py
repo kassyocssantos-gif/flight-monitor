@@ -1,29 +1,29 @@
 #!/usr/bin/env python3
 """
-miles/smiles_scraper.py — MOTOR MILHAS (Smiles) via CDP no Chrome REAL.
+miles/smiles_scraper.py — MOTOR MILHAS (Smiles) via API real, dentro da sessao.
 
-POR QUE ASSIM (e nao Playwright headless no Actions):
-- O Smiles roda atras de Akamai Bot Manager (sensor data, _abck/bm_sz) + e um SPA
-  React. Headless + IP de datacenter (GitHub Actions) = bloqueado. Confirmado.
-- A saida: conectar no SEU Chrome real (sessao logada, IP residencial, cookies
-  Akamai validos) via CDP e INTERCEPTAR a resposta da API de disponibilidade
-  (`/v1/search`) — em vez de raspar o DOM (fragil). A x-api-key e os cookies vao
-  no request automaticamente; nada hardcoded.
+DESCOBERTA (2026-06-30, validado):
+- A busca em milhas usa a API GET:
+    https://api-air-flightsearch-blue.smiles.com.br/v1/airlines/search
+    ?cabin=ECONOMIC&originAirportCode=BSB&destinationAirportCode=JFK
+    &departureDate=2026-07-15&memberNumber=<seu>&adults=1&children=0&infants=0
+    &forceCongener=false
+  (departureDate em YYYY-MM-DD; memberNumber opcional — com ele vem o preco CLUB).
+- Resposta JSON: requestedFlightSegmentList[].flightList[].fareList[] com
+    {miles, baseMiles, g3.costTax (taxa BRL), money, type (SMILES|SMILES_CLUB),
+     legListCost}, e flightList[].departure/arrival/stops/duration.
+- Akamai + login: a chamada SO passa de DENTRO da sessao logada (cookies _abck/
+  bm_sz + login). Por isso roda via fetch no Chrome real (credentials:include),
+  nao por requests/curl externos (seriam bloqueados).
 
-PRE-REQUISITOS (seus — uma vez):
-  1. Subir o Chrome com debug:
-       /Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome \\
-         --remote-debugging-port=9222
-     (ou ativar em chrome://inspect). Confirme: curl localhost:9222/json/version
-  2. Estar LOGADO no Smiles nesse Chrome (so voce tem a credencial).
+EXEC: conecta no Chrome real via CDP (Playwright connect_over_cdp) e roda o fetch
+de dentro de uma aba em www.smiles.com.br. Requer Chrome com debug:
+    /Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome --remote-debugging-port=9222
+e estar LOGADO no Smiles. (No setup atual do Kassyo o Chrome nao expoe porta TCP;
+ligue a flag acima para o modo standalone, ou rode a captura via flowa-control.)
 
-USO:
-    pip install -r miles/requirements.txt   # playwright
-    python -m playwright install chromium    # so p/ as libs; usamos o SEU Chrome
-    python miles/smiles_scraper.py
-
-Saida: miles/miles_results.json (mais barato em milhas por rota + amostra crua
-da 1a resposta da API em _raw_sample, p/ ajustar o parser na 1a validacao).
+Validado BSB->JFK 15/07: 263.500 milhas + R$ 311,73 (SMILES_CLUB) — ~R$ 5k vs
+R$ 1.546 em dinheiro (US$ 281). Pra essa rota, dinheiro ganha de longe.
 """
 
 import json
@@ -33,60 +33,70 @@ import datetime as dt
 ROOT = os.path.dirname(os.path.abspath(__file__))
 OUT_PATH = os.path.join(ROOT, "miles_results.json")
 CHROME_CDP = os.environ.get("CHROME_CDP", "http://localhost:9222")
+MEMBER = os.environ.get("SMILES_MEMBER", "")  # opcional: traz preco Smiles Clube
+CABIN = os.environ.get("SMILES_CABIN", "ECONOMIC")
 
-# Rotas a checar em milhas (origem, destino). Edite a vontade.
+# Rotas (origem, destino). Mesmas do motor-dinheiro p/ comparar milhas vs R$.
 ROUTES = [
-    ("BSB", "JFK"),
-    ("BSB", "MIA"),
-    ("GRU", "MIA"),
-    ("VCP", "MCO"),
+    ("BSB", "JFK"), ("BSB", "MIA"), ("BSB", "MCO"), ("BSB", "FLL"),
+    ("FLN", "JFK"), ("CWB", "MIA"), ("NVT", "MIA"), ("VCP", "MIA"),
 ]
-DATE_START = "2026-07-15"
-DATE_END = "2026-08-05"
+# Datas a checar (YYYY-MM-DD). A API e por dia; varremos alguns dias da janela.
+DATES = ["2026-07-15", "2026-07-20", "2026-07-25", "2026-08-01"]
 
-# A API de disponibilidade do Smiles. Casamos por substring na URL (robusto a
-# troca de host de producao): toda resposta cuja URL contenha um destes.
-API_MATCH = ("/v1/search", "airfares/search", "flightavailability")
+API = "https://api-air-flightsearch-blue.smiles.com.br/v1/airlines/search"
 
 
-def build_search_url(origin, destination, date):
-    """Deep-link da busca de emissao (dispara a chamada de availability)."""
-    return (
-        "https://www.smiles.com.br/mfe/emissao-passagem/"
-        f"?adults=1&children=0&infants=0&cabin=ECONOMIC"
-        f"&originAirport={origin}&destinationAirport={destination}"
-        f"&departureDate={date}&tripType=2&searchType=g"
-    )
+def api_url(origin, destination, date):
+    qs = (f"?cabin={CABIN}&originAirportCode={origin}&destinationAirportCode={destination}"
+          f"&departureDate={date}&memberNumber={MEMBER}"
+          f"&adults=1&children=0&infants=0&forceCongener=false")
+    return API + qs
 
 
-def extract_offers(api_json):
-    """
-    Extrai ofertas em milhas da resposta da API de disponibilidade.
-    Defensivo: o Smiles muda os nomes; tentamos os caminhos conhecidos e, se
-    nada casar, devolvemos [] (o _raw_sample salvo permite ajustar na validacao).
-    Alvo: lista de {miles:int, taxes_brl:float, date:str, flight:str}.
-    """
+def extract_offers(api_json, date):
+    """Extrai ofertas em milhas (validado contra a resposta real do Smiles)."""
     offers = []
-    segs = (api_json.get("requestedFlightSegmentList")
-            or api_json.get("segments") or [])
-    for seg in segs:
-        flights = seg.get("flightList") or seg.get("flights") or []
-        for fl in flights:
-            date = (fl.get("departure", {}) or {}).get("date") or fl.get("departureDate")
-            fares = fl.get("fareList") or fl.get("fares") or []
-            for fare in fares:
-                miles = fare.get("miles") or fare.get("milesAmount")
+    for seg in api_json.get("requestedFlightSegmentList", []) or []:
+        for fl in seg.get("flightList", []) or []:
+            stops = fl.get("stops")
+            dur = fl.get("duration", {}) or {}
+            for fare in fl.get("fareList", []) or []:
+                miles = fare.get("miles")
                 if not miles:
                     continue
-                taxes = (fare.get("money") or fare.get("airlineTax")
-                         or fare.get("taxAmount") or 0)
+                tax = fare.get("g3", {}).get("costTax") if fare.get("g3") else None
+                tax = tax if tax is not None else fare.get("money", 0)
+                try:
+                    tax = float(str(tax).replace(",", "."))
+                except (TypeError, ValueError):
+                    tax = 0.0
                 offers.append({
                     "miles": int(miles),
-                    "taxes_brl": float(taxes or 0),
+                    "taxes_brl": tax,
+                    "type": fare.get("type"),        # SMILES | SMILES_CLUB
                     "date": date,
-                    "flight": fl.get("flightNumber") or fl.get("number"),
+                    "stops": stops,
+                    "route": fare.get("legListCost"),
+                    "duration_h": dur.get("hours"),
                 })
     return offers
+
+
+def fetch_via_chrome(page, url):
+    """Roda o fetch DENTRO da sessao (herda cookies Akamai + login)."""
+    res = page.evaluate(
+        """async (u) => {
+            const r = await fetch(u, {credentials:'include'});
+            const t = await r.text();
+            return {status: r.status, body: t};
+        }""", url)
+    if res.get("status") != 200:
+        return None
+    try:
+        return json.loads(res["body"])
+    except (ValueError, KeyError):
+        return None
 
 
 def scrape():
@@ -94,75 +104,53 @@ def scrape():
         from playwright.sync_api import sync_playwright
     except ImportError:
         print("Playwright nao instalado. Rode: pip install -r miles/requirements.txt")
-        return [], None
+        return []
 
-    results, raw_sample = [], None
+    results = []
     with sync_playwright() as p:
         try:
             browser = p.chromium.connect_over_cdp(CHROME_CDP)
         except Exception as e:
-            print(f"Nao conectei no Chrome via CDP em {CHROME_CDP}: {e}\n"
-                  "Suba o Chrome com --remote-debugging-port=9222 e tente de novo.")
-            return [], None
+            print(f"Sem CDP em {CHROME_CDP}: {e}\n"
+                  "Suba o Chrome com --remote-debugging-port=9222 (e logado no Smiles).")
+            return []
 
         ctx = browser.contexts[0] if browser.contexts else browser.new_context()
-        page = ctx.new_page()
-        captured = {"json": None}
-
-        def on_response(resp):
-            try:
-                if any(m in resp.url for m in API_MATCH) and resp.request.method in ("GET", "POST"):
-                    captured["json"] = resp.json()
-            except Exception:
-                pass
-
-        page.on("response", on_response)
+        # precisa estar num contexto do dominio p/ os cookies irem no fetch
+        page = ctx.pages[0] if ctx.pages else ctx.new_page()
+        try:
+            if "smiles.com.br" not in (page.url or ""):
+                page.goto("https://www.smiles.com.br/home", wait_until="domcontentloaded", timeout=60000)
+        except Exception:
+            pass
 
         for origin, destination in ROUTES:
-            captured["json"] = None
-            try:
-                page.goto(build_search_url(origin, destination, DATE_START),
-                          timeout=60000, wait_until="domcontentloaded")
-                # espera a chamada de availability chegar (ate ~25s)
-                for _ in range(50):
-                    if captured["json"] is not None:
-                        break
-                    page.wait_for_timeout(500)
-                api_json = captured["json"]
-                if api_json is None:
-                    results.append({"route": f"{origin}-{destination}",
-                                    "error": "API /v1/search nao capturada (login? Akamai? deep-link?)"})
+            best = None
+            for date in DATES:
+                try:
+                    data = fetch_via_chrome(page, api_url(origin, destination, date))
+                except Exception as e:
+                    print(f"  [diag {origin}-{destination} {date}] {e}")
                     continue
-                if raw_sample is None:
-                    raw_sample = api_json  # 1a resposta crua p/ ajuste do parser
-                offers = extract_offers(api_json)
-                cheapest = min(offers, key=lambda x: x["miles"]) if offers else None
-                results.append({"route": f"{origin}-{destination}",
-                                "cheapest": cheapest, "found": len(offers)})
-            except Exception as e:
-                results.append({"route": f"{origin}-{destination}", "error": str(e)})
-
-        page.close()
-    return results, raw_sample
+                if not data:
+                    continue
+                for off in extract_offers(data, date):
+                    if best is None or off["miles"] < best["miles"]:
+                        best = off
+            results.append({"route": f"{origin}-{destination}", "cheapest": best})
+    return results
 
 
 def main():
-    results, raw_sample = scrape()
     data = {
         "checked_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
-        "window": {"start": DATE_START, "end": DATE_END},
-        "results": results,
-        # amostra crua da 1a resposta — usada SO na 1a validacao p/ ajustar
-        # extract_offers() aos nomes reais; pode remover depois.
-        "_raw_sample": raw_sample,
+        "cabin": CABIN,
+        "dates": DATES,
+        "results": scrape(),
     }
     with open(OUT_PATH, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
-    print(json.dumps({k: v for k, v in data.items() if k != "_raw_sample"},
-                     indent=2, ensure_ascii=False))
-    if raw_sample is not None:
-        print(f"\n[ok] amostra crua da API salva em {OUT_PATH} (_raw_sample) "
-              "p/ ajustar extract_offers() se necessario.")
+    print(json.dumps(data, indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":
