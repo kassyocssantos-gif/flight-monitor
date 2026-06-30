@@ -2,7 +2,7 @@
   "BSB-JFK": {
     "min_usd": 281.0,
     "date": "2026-07-16",
-    "seen_at": "2026-06-30 11:29 UTC"
+    "seen_at": "2026-06-30 11:41 UTC"
   },
   "BSB-MIA": {
     "min_usd": 359.0,
@@ -12,12 +12,12 @@
   "BSB-MCO": {
     "min_usd": 395.0,
     "date": "2026-07-27",
-    "seen_at": "2026-06-30 11:29 UTC"
+    "seen_at": "2026-06-30 11:41 UTC"
   },
   "BSB-FLL": {
     "min_usd": 380.0,
     "date": "2026-07-15",
-    "seen_at": "2026-06-30 11:29 UTC"
+    "seen_at": "2026-06-30 11:41 UTC"
   },
   "FLN-JFK": {
     "min_usd": 426.0,
@@ -32,7 +32,7 @@
   "NVT-MIA": {
     "min_usd": 373.0,
     "date": "2026-07-21",
-    "seen_at": "2026-06-30 11:29 UTC"
+    "seen_at": "2026-06-30 11:41 UTC"
   },
   "VCP-MIA": {
     "min_usd": 437.0,
