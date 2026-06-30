@@ -1,4 +1,4 @@
-# flight-monitor — 2026-06-30 11:38 UTC
+# flight-monitor — 2026-06-30 11:39 UTC
 _Janela 2026-07-15 a 2026-08-05 · ida · ECONOMY · fonte Google Flights (fli)_
 
 - **BSB-JFK**: sem resultado.
