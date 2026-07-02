@@ -39,10 +39,17 @@ fetch da API de dentro da aba logada. Requer Chrome com debug:
 E estar logado no Smiles. No setup atual o Chrome do Kassyo não expõe porta TCP
 (flowa-control conecta por canal próprio), então as opções são:
 
-- **Sob demanda** (mais simples): peça "checa milhas das minhas rotas" — rodo a
-  captura na hora via flowa-control e comparo com o motor-dinheiro.
-- **Standalone agendado**: subir o Chrome com `--remote-debugging-port=9222` e
-  agendar `smiles_scraper.py` no launchd.
+- **Sob demanda** (OPERACIONAL, recomendado): peça "checa milhas das minhas rotas"
+  — rodo a captura na hora via flowa-control (Chrome principal logado) e comparo
+  com o motor-dinheiro. É o modo que funciona hoje; usado em toda a validação.
+- **Standalone agendado** (TRAVADO no Chrome 149): `chrome_dedicado.sh` sobe um
+  Chrome isolado com `--remote-debugging-port` + `--remote-allow-origins=*`, mas o
+  Chrome 149 não expõe targets via CDP externo (Playwright `connect_over_cdp`,
+  `/json` e `Target.getTargets` retornam vazio). Autônomo 24/7 exigiria Chrome de
+  versão compatível OU proxy residencial (Bright Data, pago). Baixa prioridade:
+  milhas raramente ganham do dinheiro nas rotas do Kassyo.
+- Fallback confiável: `busca_milhas.py --json <resposta.json>` calcula ×15 +
+  comparação a partir de uma captura colada (que eu pego via flowa-control).
 - **Tripmilhas como fonte de promoções**: raspar a lista de oportunidades do
   tripmilhas (Wix, sem Akamai, roda até na nuvem) — pega o que ELES curam, não
   suas rotas sob demanda.
