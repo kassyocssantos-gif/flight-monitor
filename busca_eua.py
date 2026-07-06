@@ -23,6 +23,7 @@ if "--pax" in a: PAX = int(a[a.index("--pax")+1])
 ORIGINS = ["GRU", "VCP", "FLN", "CWB", "NVT", "JOI", "POA"]   # default: SP + Sul
 DESTS = ["MIA", "MCO", "FLL", "JFK", "EWR", "LAX"]
 STOPS = a[a.index("--stops")+1].upper() if "--stops" in a else None  # ex NON_STOP
+AIRLINES = a[a.index("--airlines")+1].upper() if "--airlines" in a else None  # ex LA,CM,AV
 if "--origins" in a: ORIGINS = a[a.index("--origins")+1].upper().split(",")
 if "--dests" in a: DESTS = a[a.index("--dests")+1].upper().split(",")
 ROUTES = [(o, d) for o in ORIGINS for d in DESTS]
@@ -33,6 +34,8 @@ def cheapest(o, d):
                "--class", "ECONOMY", "--format", "json"]
         if STOPS:
             cmd += ["--stops", STOPS]
+        if AIRLINES:
+            cmd += ["--airlines", AIRLINES]
         out = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
         raw = out.stdout
         j = json.loads(raw[raw.index("{"):raw.rindex("}")+1])
