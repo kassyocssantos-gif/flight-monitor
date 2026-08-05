@@ -1,4 +1,4 @@
-# flight-monitor — 2026-08-04 11:17 UTC
+# flight-monitor — 2026-08-05 11:13 UTC
 _Janela 2026-06-30 a 2026-08-05 · ida · ECONOMY · 2 pax · fonte Google Flights (fli)_
 
 - **NVT-GRU**: sem resultado.
